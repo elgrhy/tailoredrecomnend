@@ -1,0 +1,124 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "source": [],
+      "metadata": {
+        "id": "R9Uj15TqcQuG"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Import libraries\n",
+        "import pandas as pd\n",
+        "import numpy as np\n",
+        "from sklearn.cluster import KMeans\n",
+        "from sklearn.metrics.pairwise import cosine_similarity"
+      ],
+      "metadata": {
+        "id": "XpYbtP2xcUDf"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "VQ7JsdcTnl7D"
+      },
+      "outputs": [],
+      "source": [
+        "# Load data\n",
+        "transactions = pd.read_csv(\"transactions.csv\") # transaction data with columns: customer_id, date, amount, category\n",
+        "feedback = pd.read_csv(\"feedback.csv\") # feedback data with columns: customer_id, rating, comment\n",
+        "trends = pd.read_csv(\"trends.csv\") # market trends data with columns: date, category, demand\n",
+        "\n",
+        "# Preprocess data\n",
+        "transactions[\"date\"] = pd.to_datetime(transactions[\"date\"]) # convert date column to datetime format\n",
+        "trends[\"date\"] = pd.to_datetime(trends[\"date\"]) # convert date column to datetime format\n",
+        "\n",
+        "# Create customer profile matrix with rows as customers and columns as categories\n",
+        "profile = transactions.pivot_table(index=\"customer_id\", columns=\"category\", values=\"amount\", aggfunc=np.sum, fill_value=0)\n",
+        "\n",
+        "# Cluster customers into segments using K-means algorithm based on their profile matrix\n",
+        "kmeans = KMeans(n_clusters=4) # choose number of clusters (can be tuned)\n",
+        "kmeans.fit(profile) # fit the model to the profile matrix\n",
+        "profile[\"segment\"] = kmeans.labels_ # assign cluster labels to each customer\n",
+        "\n",
+        "# Create offer matrix with rows as segments and columns as categories\n",
+        "offer = pd.DataFrame(columns=profile.columns[:-1]) # initialize offer matrix with same categories as profile matrix\n",
+        "\n",
+        "# For each segment, find the most popular category based on the average spending of customers in that segment\n",
+        "for segment in offer.index:\n",
+        "  offer.loc[segment] = profile[profile[\"segment\"] == segment].mean() # calculate the mean spending for each category in each segment\n",
+        "  \n",
+        "offer[\"category\"] = offer.idxmax(axis=1) # find the category with the highest mean spending for each segment\n",
+        "\n",
+        "# For each segment, find the most relevant trend based on the cosine similarity between the offer vector and the trend vector for each category\n",
+        "for segment in offer.index:\n",
+        "  offer_vector = offer.loc[segment][:-1] # get the offer vector for each segment (exclude the category column)\n",
+        "  trend_vector = trends[trends[\"date\"] == trends[\"date\"].max()].set_index(\"category\")[\"demand\"] # get the trend vector for each category based on the latest date in trends data\n",
+        "  \n",
+        "  similarity = cosine_similarity([offer_vector], [trend_vector])[0][0] # calculate the cosine similarity between the offer vector and the trend vector\n",
+        "  \n",
+        "  offer.loc[segment,\"similarity\"] = similarity # store the similarity score for each segment\n",
+        "  \n",
+        "offer[\"trend\"] = offer[\"similarity\"].rank(ascending=False) # rank the segments based on their similarity score (higher score means more relevant trend)\n",
+        "\n",
+        "# Generate recommendations for each segment based on their offer category and trend rank\n",
+        "recommendations = {} # initialize a dictionary to store recommendations for each segment\n",
+        "\n",
+        "for segment in offer.index:\n",
+        "  category = offer.loc[segment,\"category\"] # get the offer category for each segment\n",
+        "  rank = int(offer.loc[segment,\"trend\"]) # get the trend rank for each segment\n",
+        "  \n",
+        "  if rank == 1: \n",
+        "    message = f\"Offer a discount or a bonus on {category} products or services as they are in high demand right now.\" \n",
+        "    # if rank is 1, then suggest a discount or a bonus to attract more customers\n",
+        "    \n",
+        "  elif rank == 2:\n",
+        "    message = f\"Promote {category} products or services as they are trending up in demand recently.\"\n",
+        "    # if rank is 2, then suggest a promotion to increase awareness and interest\n",
+        "    \n",
+        "  elif rank == 3:\n",
+        "    message = f\"Bundle {category} products or services with other complementary categories to increase cross-selling opportunities.\"\n",
+        "    # if rank is 3, then suggest a bundle to encourage more spending\n",
+        "    \n",
+        "  else:\n",
+        "    message = f\"Upsell {category} products or services by offering premium features or benefits to loyal customers.\"\n",
+        "    # if rank is lower than 3, then suggest an upsell to increase profit margin\n",
+        "    \n",
+        "  \n",
+        "  recommendations[segment] = message \n",
+        "  \n",
+        "  \n",
+        "print(recommendations)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "ZZQGqzCYcsBn"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
